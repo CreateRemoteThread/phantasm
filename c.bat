@@ -1,3 +1,3 @@
 @echo off
 
-cl /c /O2 /Tp%1
+cl /c /O2 /Zi /Tp%1

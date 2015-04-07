@@ -103,7 +103,7 @@ int main(int argc, char **argv)
 
     printf("I:PROCESS_BASIC_INFORMATION.PebBaseAddress = %08x\n", (unsigned long )pib.PebBaseAddress);
     ReadProcessMemory(pi.hProcess,(LPCVOID )pib.PebBaseAddress, (LPVOID )&peb, sizeof(peb),&bW);
-    printf("I:PROCESS_ENVIRONMENT_BLOCK.ImageBaseAddress = %08x\n", (unsigned long )peb.ImageBaseAddress);
+    printf("I:PROCESS_ENVIRONMENT_BLOCK.ImageBaseAddress = %08x\n", (unsigned long )peb.ImageBaseAddrss);
     
     unsigned long addressOfEntryPoint = getEntryPoint(pi.hProcess, (unsigned long )peb.ImageBaseAddress);
 
