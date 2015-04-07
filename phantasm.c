@@ -442,7 +442,7 @@ int handleFirstException(DEBUG_EVENT *de, int *firstException, unsigned long add
             memset(&me,0,sizeof(me));
             me.dwSize = sizeof(me);
             /************ DETERMINE TRACE AREA **************/
-            HANDLE hSnap =  CreateToolhelp32Snapshot (TH32CS_SNAPMODULE, processId);
+            HANDLE hSnap =  CreateToolhelp32Snapshot (TH32CS_SNAPMODULE + TH32CS_SNAPMODULE32, processId);
 
             BOOL bCont = Module32First(hSnap, &me);
             if(

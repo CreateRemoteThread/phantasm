@@ -12,6 +12,7 @@
 
 #define CHAR_TYPE char
 
+
 CHAR_TYPE *stristr
   (CHAR_TYPE * szStringToBeSearched, const CHAR_TYPE * szSubstringToSearchFor)
 {
@@ -125,7 +126,9 @@ scanModules (HANDLE hProcess, DWORD processId, int printMode)
   exportGroupStruct *eHead = NULL;
   MODULEENTRY32 me;
   int bCont;
-  HANDLE g_hSnap = CreateToolhelp32Snapshot (TH32CS_SNAPMODULE, processId);
+  HANDLE g_hSnap = CreateToolhelp32Snapshot (TH32CS_SNAPMODULE + TH32CS_SNAPMODULE32, processId);
+
+  // printf("scanmodules was here\n");
 
   memset (&me, 0, sizeof (me));
   me.dwSize = sizeof (me);
@@ -166,6 +169,9 @@ scanModules (HANDLE hProcess, DWORD processId, int printMode)
      memset(eNext,0,sizeof(exportGroupStruct));
      eHead->next = eNext;
    */
+
+
+  CloseHandle(g_hSnap);
   return e;
 }
 
@@ -183,6 +189,7 @@ scanSingleModule (HANDLE hProcess, DWORD modBaseAddr, DWORD modBaseSize)
     DWORD reserved1;
 
   int retVal = ReadProcessMemory (hProcess, (LPVOID) modBaseAddr, pMapping, modBaseSize,&bR);
+  // printf(" * SCANSINGLEMODULE %08x %08x %c%c%c%c\n", (unsigned long )modBaseAddr, (unsigned long )pMapping, pMapping[0],pMapping[1],pMapping[2],pMapping[3]);
   if (bR != modBaseSize )
     {
       if(DEBUG_FAILED_READS)
@@ -237,6 +244,11 @@ scanSingleModule (HANDLE hProcess, DWORD modBaseAddr, DWORD modBaseSize)
         }
 
     }
+  if (pMapping[0] != 'M' || pMapping[1] != 'Z')
+  {
+	  // printf("* skipping module\n");
+	  return NULL;
+  }
 
   VirtualProtectEx (hProcess, (LPVOID) modBaseAddr, modBaseSize,oldProtect, &reserved1);
   
@@ -368,12 +380,15 @@ resolveAddrSoft (exportGroupStruct * e, DWORD dlladdr)
   DWORD lastAddr = 0;
   exportStruct *lastE = NULL;
 
+	// printf ("* resolving address %08x\n", dlladdr);
+
 #ifdef DEBUG
   printf ("* resolving address %08x\n", dlladdr);
 #endif
 
   while (eGP != NULL)
     {
+	  // printf("* scanning %08x-%08x\n",eGP->moduleBase, eGP->moduleEnd);
       if (eGP->moduleBase <= dlladdr && eGP->moduleEnd >= dlladdr)
         {
           if (dlladdr == eGP->moduleBase)
