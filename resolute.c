@@ -12,7 +12,6 @@
 
 #define CHAR_TYPE char
 
-
 CHAR_TYPE *stristr
   (CHAR_TYPE * szStringToBeSearched, const CHAR_TYPE * szSubstringToSearchFor)
 {
