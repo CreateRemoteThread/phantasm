@@ -197,7 +197,7 @@ int main(int argc, char **argv)
 											printTimestamp();
                                             if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
                                             {
-                                                printf("C:%s()\n", resolvedFunction);
+                                                printf("+ C:%s()\n", resolvedFunction);
                                             }
                                             free(resolvedFunction);
                                         }
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
 									printTimestamp();
                                     if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
                                     {
-                                        printf("C:%08x:%s()\n",(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
+                                        printf("* C:%08x:%s()\n",(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
                                     }
 
                                     free(resolvedFunction);
