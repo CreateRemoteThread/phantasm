@@ -22,5 +22,8 @@
 *.x86_64
 *.hex
 
+#runtime traces
+*.run
+
 # allow
 !phantasm.exe

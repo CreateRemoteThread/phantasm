@@ -5,8 +5,6 @@
     X: exception
     T: tag
     -: instruction
-
-	- updated to latest windows 64-bit SDK
 */
 
 #include <stdio.h>
@@ -261,7 +259,7 @@ int main(int argc, char **argv)
 									printTimestamp();
                                     if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
                                     {
-                                        printf("* C:%08x:%s()\n",(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
+                                        printf("C:%08x:%s()\n",(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
                                     }
 
                                     free(resolvedFunction);
