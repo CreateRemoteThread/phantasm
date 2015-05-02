@@ -53,6 +53,9 @@ void usage();
 
 int main(int argc, char **argv)
 {
+	#ifdef SUPERVERBOSE
+		printf("** SUPER VERBOSE MODE ACTIVE **\n");
+	#endif
     if(argc == 1)
     {
         usage();
@@ -225,6 +228,9 @@ int main(int argc, char **argv)
 
 								// the original protection on test2.exe is PAGE_WRITECOPY.
 								// printf("I:VirtualProtectEx from %08x to %08x\n", memBuf.BaseAddress, ti->endAddress);
+								#ifdef SUPERVERBOSE
+									printf("I:VirtualProtectEx from %08x to %08x\n", memBuf.BaseAddress, ti->endAddress);
+								#endif
 							    if(VirtualProtectEx(pi.hProcess, (LPVOID )(memBuf.BaseAddress), (unsigned long )(ti->endAddress - ti->startAddress), PAGE_READWRITE,&temp_oldProtect) == 0)
 								{
 									printf("E:VirtualProtextEx to PAGE_READWRITE failed\n");
@@ -289,6 +295,9 @@ int main(int argc, char **argv)
                           )
                         {
 							// printf("* unprotecting page %08x to %08x\n", (unsigned long )ti->startAddress, (unsigned long )ti->endAddress);
+							#ifdef SUPERVERBOSE
+								printf("* unprotecting page %08x to %08x\n", (unsigned long )ti->startAddress, (unsigned long )ti->endAddress);
+							#endif
                             DWORD temp_oldProtect;
                             VirtualProtectEx(pi.hProcess, (LPVOID )ti->startAddress, (ti->endAddress - ti->startAddress), PAGE_EXECUTE_READWRITE,&temp_oldProtect);
                             hThread = OpenThread(THREAD_ALL_ACCESS,FALSE,de.dwThreadId);
@@ -373,6 +382,9 @@ int main(int argc, char **argv)
 						printTimestamp();
 						printf("* new thread:c.Eip = %08x\n", (unsigned long )c.Eip);
 					}
+					#ifdef SUPERVERBOSE
+						printf("* setting single step flag (new thread)\n");
+					#endif
                     SetThreadContext(hThread,&c);
                     CloseHandle(hThread);
                     ContinueDebugEvent(de.dwProcessId,de.dwThreadId,DBG_CONTINUE);
@@ -496,6 +508,9 @@ int handleFirstException(DEBUG_EVENT *de, int *firstException, unsigned long add
             c.Eip = addressOfEntryPoint;
             c.EFlags |= 0x00000100;
 
+			#ifdef SUPERVERBOSE
+				printf("* setting single step flag (handle first exception)\n");
+			#endif
             SetThreadContext(hThread,&c);
 
             printInstruction(hProcess, hThread, de->dwThreadId, &g_insn,"-");
@@ -890,6 +905,9 @@ void printInstruction(HANDLE hProcess, HANDLE hThread, unsigned long dwThreadId,
 		printf("\n");
 	}
     free(tempInstrString);
+	#ifdef SUPERVERBOSE
+		printf("* setting single step flag (normal instruction)\n");
+	#endif
     SetThreadContext(hThread,&c);
 }
 
