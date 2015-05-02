@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
-# snippet finder and visualisation tool
-# formless
+# sql-based visualisation tool
 
 import sys
 import sqlite3
@@ -11,14 +10,23 @@ def usage():
   print "%s -d [database] -f [file] -f [file]"
   sys.exit(0);
 
-def storeFile(c,f):
-  f = open(f,"r")
+def storeFile(c,file):
+  f = open(file,"r")
+  c.execute("insert into binaries values (null,?)",(file,))
+  c.execute("select max(binary) from binaries")
+  latestRecord = c.fetchone()
+  (latestBinary,) = latestRecord
   for line in f.readlines():
     if line[0] == '-':
       items = line.split(':')
-      
+      offset = int(items[2],16)
+      thread = int(items[1],16)
+      instr = items[3]
+      disasm = " ".join(items[4:])
+      c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm))
     elif line[0] == 'C':
-      items = line.split(':')
+      
+      c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm))
     else:
       pass
   f.close()
@@ -40,11 +48,11 @@ def main():
       usage()
       sys.exit(0)
   if dbFile == None:
-    dbFile == "default.db"
+    dbFile = "default.db"
   conn = sqlite3.connect(dbFile)
   c = conn.cursor()
-  c.execute("create table if not exists instructions (binary int,offset long,instr text,disasm text)")
-  c.execute("create table if not exists binaries (binary int,binaryname text")
+  c.execute("create table if not exists instructions (binary integer,thread long,offset long,instr text,disasm text)")
+  c.execute("create table if not exists binaries (binary integer primary key autoincrement,binaryname text)")
   for f in inFiles:
     storeFile(c,f)
   conn.commit()

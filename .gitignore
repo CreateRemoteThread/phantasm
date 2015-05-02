@@ -22,8 +22,9 @@
 *.x86_64
 *.hex
 
-#runtime traces
+#runtime traces + default.db
 *.run
+default.db
 
 # allow
 !phantasm.exe

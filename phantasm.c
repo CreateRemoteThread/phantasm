@@ -189,22 +189,16 @@ int main(int argc, char **argv)
                                         char *resolvedFunction = resolveAddrSoft(globalExports,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress);
                                         if(GetLastError() == 0)
                                         {
-                                            if(!quietMode)
-                                            {
-                                                printf("C:calling %s\n", resolvedFunction);
-                                                // dumpFunctionArgs(pi.hProcess, (unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress, resolvedFunction, 4, "%s%s%s%s");
-                                            }
-
 											printTimestamp();
                                             if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
                                             {
-                                                printf("+ C:%s()\n", resolvedFunction);
+                                                printf("C:08x:%08x:%s()\n", (unsigned long )de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
                                             }
                                             free(resolvedFunction);
                                         }
                                         else
                                         {
-                                            printf("C:Unknown()\n");
+                                            printf("C:%08x:%08x:Unknown()\n",(unsigned long )de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress);
                                         }
                                         lastCall = 0;
                                     }
@@ -250,16 +244,10 @@ int main(int argc, char **argv)
                                 char *resolvedFunction = resolveAddrSoft(globalExports,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress);
                                 if(GetLastError() == 0)
                                 {
-                                    if(!quietMode)
-                                    {
-                                        printf("C:calling %s\n", resolvedFunction);
-                                        // dumpFunctionArgs(pi.hProcess, (unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress, resolvedFunction, 4, "%s%s%s%s");
-                                    }
-
 									printTimestamp();
                                     if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
                                     {
-                                        printf("C:%08x:%s()\n",(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
+                                        printf("C:%08x:%08x:%s()\n",(unsigned long )de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
                                     }
 
                                     free(resolvedFunction);
