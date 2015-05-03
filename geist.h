@@ -16,7 +16,7 @@ char *disassembleSingleInstruction(HANDLE hProcess, unsigned long disasmOffset, 
 void dumpFunctionArgs(HANDLE hProcess, unsigned long Esp, char *functionName, int argCount, char *functionMask);
 void buildArgumentHooks(char *functionPrototypeFile);
 void chomp(char *s);
-int lookupFunctionAndDump(HANDLE hProcess, char *functionName, unsigned long dwThreadId);
+int lookupFunctionAndDump(HANDLE hProcess, char *functionName, unsigned long dwThreadId,unsigned long crashAddress);
 BYTE *readUntilZero (HANDLE hProcess, DWORD startAddress);
 void setDebugMaskLoader(int i);
 

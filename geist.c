@@ -53,7 +53,7 @@ char *disassembleSingleInstruction(HANDLE hProcess, unsigned long disasmOffset, 
 
 #define MAX_ARGS_PRINTF 1024
 
-int lookupFunctionAndDump(HANDLE hProcess, char *functionName, unsigned long dwThreadId)
+int lookupFunctionAndDump(HANDLE hProcess, char *functionName, unsigned long dwThreadId,unsigned long crashAddress)
 {
     char *funcNamePtr = NULL;
     int i = 0;
@@ -164,7 +164,7 @@ int lookupFunctionAndDump(HANDLE hProcess, char *functionName, unsigned long dwT
 
     strcat(printFunctionString,");");
 
-    printf("C:%s\n", printFunctionString);
+    printf("C:%08x:%08x:%s\n", (unsigned long )dwThreadId,(unsigned long )crashAddress,printFunctionString);
     free(tempPrintBuffer);
     free(printFunctionString);
     

@@ -5,12 +5,21 @@
 import sys
 import sqlite3
 import getopt
+from Tkinter import *
+
+class graphWindow:
+  def __init__(self,parent):
+    self.parent = parent
+    parent.resizable(0,0)
+    parent.title("time vs graph")
 
 def usage():
   print "%s -d [database] -f [file] -f [file]"
   sys.exit(0);
 
 def storeFile(c,file):
+  instructionCount = 0
+  callCount = 0
   f = open(file,"r")
   c.execute("insert into binaries values (null,?)",(file,))
   c.execute("select max(binary) from binaries")
@@ -18,17 +27,31 @@ def storeFile(c,file):
   (latestBinary,) = latestRecord
   for line in f.readlines():
     if line[0] == '-':
-      items = line.split(':')
-      offset = int(items[2],16)
-      thread = int(items[1],16)
-      instr = items[3]
-      disasm = " ".join(items[4:])
-      c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm))
+      try:
+        items = line.split(':')
+        offset = int(items[2],16)
+        thread = int(items[1],16)
+        instr = items[3]
+        disasm = ":".join(items[4:])
+        c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm))
+        instructionCount += 1
+      except:
+        print line
+        sys.exit(0)
     elif line[0] == 'C':
-      
-      c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm))
+      try:
+        items = line.split(':')
+        offset = int(items[2],16)
+        thread = int(items[1],16)
+        instr = ":".join(items[3:])
+        c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,"CALL",instr))
+        callCount += 1
+      except:
+        print line
+        sys.exit(0)
     else:
       pass
+  print "file %s added to db with %d instructions and %d calls" % (file,instructionCount,callCount)
   f.close()
 
 def main():
@@ -55,8 +78,13 @@ def main():
   c.execute("create table if not exists binaries (binary integer primary key autoincrement,binaryname text)")
   for f in inFiles:
     storeFile(c,f)
+    conn.commit()
   conn.commit()
   conn.close()
+  # select root
+  root = Tk()
+  _graphWindow = graphWindow(root)
+  root.mainloop()
 
 if __name__ == "__main__":
   main()

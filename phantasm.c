@@ -81,7 +81,7 @@ int main(int argc, char **argv)
 
     // start process
 
-    int mRet = CreateProcess(exeFileName,exeCmdLine,NULL,NULL,FALSE,DEBUG_PROCESS,NULL,exeWorkingDir,&si,&pi);
+    int mRet = CreateProcess(exeFileName,exeCmdLine,NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,exeWorkingDir,&si,&pi);
     if(mRet == 0)
     {
         printf("E:CreateProcess failed\n");
@@ -190,7 +190,7 @@ int main(int argc, char **argv)
                                         if(GetLastError() == 0)
                                         {
 											printTimestamp();
-                                            if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
+                                            if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress) == 0)
                                             {
                                                 printf("C:08x:%08x:%s()\n", (unsigned long )de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
                                             }
@@ -245,7 +245,7 @@ int main(int argc, char **argv)
                                 if(GetLastError() == 0)
                                 {
 									printTimestamp();
-                                    if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId) == 0)
+                                    if(lookupFunctionAndDump(pi.hProcess, resolvedFunction, de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress) == 0)
                                     {
                                         printf("C:%08x:%08x:%s()\n",(unsigned long )de.dwThreadId,(unsigned long )de.u.Exception.ExceptionRecord.ExceptionAddress,resolvedFunction);
                                     }
