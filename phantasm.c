@@ -5,6 +5,8 @@
     X: exception
     T: tag
     -: instruction
+	+: flow control
+	B: base offset
 */
 
 #include <stdio.h>
@@ -476,7 +478,8 @@ int handleFirstException(DEBUG_EVENT *de, int *firstException, unsigned long add
             }
             else
             {
-                printf("I:found base module from %08x to %08x\n", (unsigned long )me.modBaseAddr, (unsigned long )(me.modBaseAddr + me.modBaseSize));
+				printf("I:found base module");
+                printf("B:%08x:%08x\n", (unsigned long )me.modBaseAddr, (unsigned long )(me.modBaseAddr + me.modBaseSize));
                 ti->startAddress = (unsigned long )me.modBaseAddr;
                 ti->endAddress = (unsigned long )(me.modBaseAddr + me.modBaseSize);
             }
@@ -521,16 +524,6 @@ int handleFirstException(DEBUG_EVENT *de, int *firstException, unsigned long add
                 printf("%s:%08x:%08x:%s:%s\n", tagType, dwThreadId, (unsigned long )c.Eip, &sprintfInstructionOpcodes, tempInstrString);
                 free(tempInstrString);
             }
-            */
-
-            /*
-			if(!noOpcodes)
-			{
-				char *tempInstrString = disassembleSingleInstruction(hProcess, c.Eip, de->dwThreadId, &g_insn, NULL,NULL);
-				printTimestamp();
-				printf("-:%08x:%08x:%s\n", de->dwThreadId, (unsigned long )c.Eip, tempInstrString);
-				free(tempInstrString);
-			}
             */
 
             // printf("* first exception handled at %08x\n", (unsigned long )de->u.Exception.ExceptionRecord.ExceptionAddress);
@@ -777,6 +770,15 @@ void buildFunctionHooks()
     return;
 }
 
+int isFlowControl(x86_insn_t *insn)
+{
+	if(insn->type == insn_jcc || insn->type == insn_jmp || insn->type == insn_call)
+	{
+		return 1;
+	}
+	return 0;
+}
+
 // SetSingleStep works here.
 void printInstruction(HANDLE hProcess, HANDLE hThread, unsigned long dwThreadId, x86_insn_t *insn, char *tagType)
 {
@@ -806,6 +808,7 @@ void printInstruction(HANDLE hProcess, HANDLE hThread, unsigned long dwThreadId,
     {
         lastCall--;
     }
+
 	if(!noOpcodes)
 	{
         memset(&sprintfInstructionOpcodes,0,(2 * instructionLength) + 1);
@@ -819,15 +822,15 @@ void printInstruction(HANDLE hProcess, HANDLE hThread, unsigned long dwThreadId,
         sprintfInstructionOpcodes[2 * i] = '\0';
 
 		printTimestamp();
-		printf("%s:%08x:%08x:%s:%s", tagType, dwThreadId, (unsigned long )c.Eip, &sprintfInstructionOpcodes, tempInstrString);
+		
 
-		if (insn->type == insn_jcc || insn->type == insn_jmp || insn->type == insn_call)
+		if ( isFlowControl(insn) == 1)
 		{
-			// do nothing, do not print extra parameters (for now)
-			// because jmp 0x8 [<blah>] looks wierd, next eip will tell us anyway.
+			printf("+:%08x:%08x:%s:%s", dwThreadId, (unsigned long )c.Eip, &sprintfInstructionOpcodes, tempInstrString);
 		}
 		else
 		{
+			printf("%s:%08x:%08x:%s:%s", tagType, dwThreadId, (unsigned long )c.Eip, &sprintfInstructionOpcodes, tempInstrString);
 			size_t opcount = insn->operand_count;
 			x86_oplist_t *oplist = insn->operands;
 			x86_op_t operand;

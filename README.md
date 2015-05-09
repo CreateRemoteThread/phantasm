@@ -12,3 +12,9 @@ function calls it knows about (as per arghooks.lst)
 phantasm operates by messing with memory protection, so it may interfere with
 applications which make use of page permissions. ymmv, 32-bit executables only
 for now.
+
+gdiff
+=====
+
+gdiff is the accompanying execution visualisation tool, and is heavily work in
+progress.

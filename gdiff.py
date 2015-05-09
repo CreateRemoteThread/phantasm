@@ -1,11 +1,25 @@
 #!/usr/bin/python
 
-# 04
-
 import sys
 import sqlite3
 import getopt
+import operator
 from Tkinter import *
+
+class executionBlock:
+  def __init__(self,offset,instr):
+    self.instructionList = [instr]
+    self.startOffset = offset
+    self.length = len(instr) / 2
+    self.runTimes = 1
+    
+  def append(self,item):
+    self.instructionList.append(item)
+  
+  # adding two blocks together
+  def __iadd__(self,other):
+    self.instructionList.append(other.instructionList)
+    return self
 
 class graphWindow:
   def __init__(self,parent):
@@ -26,17 +40,17 @@ def storeFile(c,file):
   latestRecord = c.fetchone()
   (latestBinary,) = latestRecord
   for line in f.readlines():
-    if line[0] == '-':
+    if line[0] == '-' or line[0] == '+':
       try:
         items = line.split(':')
         offset = int(items[2],16)
         thread = int(items[1],16)
         instr = items[3]
         disasm = ":".join(items[4:])
-        c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm))
+        c.execute("insert into instructions values (?,?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm,line[0]))
         instructionCount += 1
       except:
-        print line
+        print "E:%s" % line
         sys.exit(0)
     elif line[0] == 'C':
       try:
@@ -44,39 +58,52 @@ def storeFile(c,file):
         offset = int(items[2],16)
         thread = int(items[1],16)
         instr = ":".join(items[3:])
-        c.execute("insert into instructions values (?,?,?,?,?)",(latestBinary,thread,offset,"CALL",instr))
+        c.execute("insert into instructions values (?,?,?,?,?,?)",(latestBinary,thread,offset,"CALL",instr,line[0]))
         callCount += 1
       except:
-        print line
+        print "E:%s" % line
+        sys.exit(0)
+    elif line[0] == 'B':
+      try:
+        items = line.split(':')
+        modname = items[1]
+        base = int(items[2],16)
+        end = int(items[3],16)
+        c.execute("insert into modules values (?,?,?,?)",(latestBinary,modname,base,end))
+      except:
+        print "E:%s" % line
         sys.exit(0)
     else:
       pass
   print "file %s added to db with %d instructions and %d calls" % (file,instructionCount,callCount)
   f.close()
 
-class instructionBlock:
-  def __init__(self,address):
-    self.address = address
-    self.instructions = []
-
-  def append(self, instruction):
-    self.instructions.append(instruction)
-
-  def __len__(self):
-    return 42
-
+# offset + length should be close enough to identify an execution block
 def identifyBlocks(eipTupleList):
   knownBlocks = []
+  knownOffsets = []
   currentBlock = None
   nextEip = 0
-  for (eip,instr) in eipTupleList:
-    if predictedEip = eip:
-      predictedEip += len(instr) / 2
-      currentBlock.append(instr)
+  for (thread,tag,offset,instr) in eipTupleList:
+    if currentBlock is None:
+      currentBlock = executionBlock(offset,instr)
     else:
-      if currentBlock != None:
-        knownBlocks.append(currentBlock)
-        knownOffsets.append(currentBlock.offset):
+      if tag == '+':
+        currentBlock.append(instr)
+        currentBlock.length += len(instr) / 2
+        if (currentBlock.startOffset,currentBlock.length) in knownOffsets:
+          for block in knownBlocks:
+            if block.startOffset == currentBlock.startOffset and block.length == currentBlock.length:
+              # just tick another block run time.  
+              block.runTimes += 1
+              break
+        else:
+          knownBlocks.append(currentBlock)
+          knownOffsets.append( (currentBlock.startOffset,currentBlock.length) )
+        currentBlock = None
+      else:
+        currentBlock.append(instr)
+        currentBlock.length += len(instr) / 2
   return knownBlocks
 
 def intWithCommas(x):
@@ -110,8 +137,10 @@ def main():
     dbFile = "default.db"
   conn = sqlite3.connect(dbFile)
   c = conn.cursor()
-  c.execute("create table if not exists instructions (binary integer,thread long,offset long,instr text,disasm text)")
+  c.execute("create table if not exists instructions (binary integer,thread long,offset long,instr text,disasm text,tag char)")
   c.execute("create table if not exists binaries (binary integer primary key autoincrement,binaryname text)")
+  c.execute("create table if not exists modules (binary integer,modname text, start long, end long)")
+  conn.commit()
   for f in inFiles:
     storeFile(c,f)
     conn.commit()
@@ -125,13 +154,18 @@ def main():
     instructionsPerRow = c.fetchall()
     (instructionCount,) = instructionsPerRow[0]
     print "loaded %d instructions found for binary %d" % (instructionCount,binaryid)
-    c.execute("select thread,offset,instr from instructions where binary=%d" % binaryid)
+    c.execute("select thread,tag,offset,instr from instructions where binary=%d" % binaryid)
     instrList = c.fetchall()
-    identifyBlocks(instrList)
-  root = Tk()
-  _graphWindow = graphWindow(root)
-  root.mainloop()
-  conn.close()
+    knownBlocks = identifyBlocks(instrList)
+    print "top 10 known blocks"
+    hotBlocks = 0
+    # from http://stackoverflow.com/questions/4010322/sort-a-list-of-class-instances-python
+    sortedBlocks = sorted(knownBlocks, key = operator.attrgetter('runTimes'))
+    for block in sortedBlocks:
+      if block.runTimes > 1:
+        print "+ block %08x byte len %d exec count %d" % (block.startOffset,block.length,block.runTimes)
+        hotBlocks += 1
+    print "hot blocks %d" % hotBlocks
 
 if __name__ == "__main__":
   main()

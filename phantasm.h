@@ -140,3 +140,4 @@ int getResponse(char *question);
 #define MODE_READ 1
 
 DWORD useRegister(CONTEXT * c, char *regSelect, DWORD value, int opMode);
+int isFlowControl(x86_insn_t *insn);
