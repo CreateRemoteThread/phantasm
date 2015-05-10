@@ -9,7 +9,7 @@ import time
 import random
 from Tkinter import *
 
-# ~follow me~
+# ~ follow me ~
 
 class graphWindow:
   def __init__(self,parent):
@@ -18,9 +18,27 @@ class graphWindow:
     top.title("the blind were born this way")
     self.graphFrame = Frame(self.top,width=1200, height=400)
     self.graphFrame.pack()
-    self.graphCanvas = Canvas(self.graphFrame,width=1200,height=400)
-    self.graphCanvas.pack()
-    
+    #self.graphCanvas = Canvas(self.graphFrame,width=1200,height=400)
+    #self.graphCanvas.pack()
+
+  def graphRun(self,c,friendlyname):
+    processBlocks = {}
+    c.execute("select binary from binaries where friendlyname = ?" , (friendlyname,))
+    binaryIdTuple = c.fetchone()
+    binaryId = binaryIdTuple[0]
+    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm from blocks where binary = ?", (binaryId,) )
+    resultBlocks = c.fetchall()
+    totalLength = 0
+    for (blocknum,blockref,offset,instr,disasm) in resultBlocks:
+      processBlocks[blocknum] = (blockref, offset, instr, disasm)
+      if len(instr) == 0:
+        totalLength += 1
+      else:
+        totalLength += len(instr) / 2
+    for i in range(1,max(processBlocks.keys())):
+      (blockref, offset, instr, disasm) = processBlocks[i]
+    print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
+
 class executionBlock:
   def __init__(self,offset,instr,disasm):
     self.instrText = instr
@@ -41,9 +59,9 @@ def usage():
   print "   -g [run]: graph execution for a given run within specified db, can repeat"
   sys.exit(0);
 
+# (binary integer, blocknum integer, blockref integer, addr long, blockdata text, blockdisasm text, runcount integer)
 def storeFile(c,file):
   instructionCount = 0
-  callCount = 0
   modtime = time.ctime(os.path.getmtime(file))
   longFileName = "%s-%s" % (file,modtime)
   friendlyName = "%s-%04x" % (file,random.randint(0,0xFFFF))
@@ -58,6 +76,13 @@ def storeFile(c,file):
   c.execute("select max(binary) from binaries")
   latestRecord = c.fetchone()
   (latestBinary,) = latestRecord
+  lastBlockNumber = 1
+  knownBlocks = []
+  knownOffsets = []
+  currentBlock = None
+  nextEip = 0
+  lastThread = 0
+  runCounts = {}
   for line in f.readlines():
     if line[0] == '-' or line[0] == '+':
       try:
@@ -66,22 +91,36 @@ def storeFile(c,file):
         thread = int(items[1],16)
         instr = items[3]
         disasm = ":".join(items[4:])
-        c.execute("insert into instructions values (?,?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm,line[0]))
+        # c.execute("insert into instructions values (?,?,?,?,?,?)",(latestBinary,thread,offset,instr,disasm,line[0]))
         instructionCount += 1
       except:
         print "E:%s" % line
         sys.exit(0)
-    elif line[0] == 'C':
-      try:
-        items = line.split(':')
-        offset = int(items[2],16)
-        thread = int(items[1],16)
-        instr = ":".join(items[3:])
-        c.execute("insert into instructions values (?,?,?,?,?,?)",(latestBinary,thread,offset,"CALL",instr,line[0]))
-        callCount += 1
-      except:
-        print "E:%s" % line
-        sys.exit(0)
+      if currentBlock is None:
+        currentBlock = executionBlock(offset,instr,disasm)
+      else:
+        if line[0] == '+' or lastThread != thread:
+          currentBlock.append(instr,disasm)
+          currentBlock.length += len(instr) / 2
+          blockExists = False
+          for (start, length, index) in knownOffsets:
+            if currentBlock.startOffset == start and currentBlock.length == length:
+              # i.e. known block
+              c.execute("insert into blocks values (?,?,?,?,?,?,0)",(latestBinary,lastBlockNumber,index,currentBlock.startOffset,"",""))  
+              runCounts[index] += 1
+              blockExists = True
+              break
+          if blockExists == False:          # already taken care of
+            knownBlocks.append(currentBlock)
+            knownOffsets.append( (currentBlock.startOffset,currentBlock.length,lastBlockNumber) )
+            c.execute("insert into blocks values (?,?,?,?,?,?,1)",(latestBinary,lastBlockNumber,0,currentBlock.startOffset,currentBlock.instrText,currentBlock.disasmText))
+            runCounts[lastBlockNumber] = 1
+            lastBlockNumber += 1
+          currentBlock = None
+        else:
+          currentBlock.append(instr,disasm)
+          currentBlock.length += len(instr) / 2
+      lastThread = thread
     elif line[0] == 'B':
       try:
         items = line.split(':')
@@ -94,49 +133,12 @@ def storeFile(c,file):
         sys.exit(0)
     else:
       pass
-  print "file %s added to db with %d instructions and %d calls" % (file,instructionCount,callCount)
+  # print "updating run counts..."
+  for i in runCounts.keys():
+    if runCounts[i] != 1:
+      c.execute("update blocks set runcount = ? where blocknum = ?",(runCounts[i],i))
+  print "file %s added to db with %d instructions" % (file,instructionCount)
   f.close()
-  saveBlocks(c,latestBinary)
-
-# save blocks the first time we write to file
-# TODO - integrate this with the first save to file pass, no reason for this to be duplicated effort
-# TODO - this code needs a verification check
-# blocks structure: (binary integer, blocknum integer, blockref integer, blockdata text, blockdisasm text)
-# instr structure:  (binary integer,thread long,offset long,instr text,disasm text,tag char)
-def saveBlocks(c,latestBinary):
-  lastBlockNumber = 1
-  eipTupleList = c.execute("select thread,tag,offset,instr,disasm from instructions where binary=%d" % latestBinary)
-  eipTupleList = c.fetchall()
-  # knownBlocks = identifyBlocks(instrList)
-  knownBlocks = []
-  knownOffsets = []
-  currentBlock = None
-  nextEip = 0
-  lastThread = 0
-  for (thread,tag,offset,instr,disasm) in eipTupleList:
-    if currentBlock is None:
-      currentBlock = executionBlock(offset,instr,disasm)
-    else:
-      if tag == '+' or lastThread != thread:
-        currentBlock.append(instr,disasm)
-        currentBlock.length += len(instr) / 2
-        blockExists = False
-        for (start, length, index) in knownOffsets:
-          if currentBlock.startOffset == start and currentBlock.length == length:
-            c.execute("insert into blocks values (?,?,?,?,?)",(latestBinary,lastBlockNumber,index,"",""))
-            blockExists = True
-            break
-        if blockExists == False:          # already taken care of
-          knownBlocks.append(currentBlock)
-          knownOffsets.append( (currentBlock.startOffset,currentBlock.length,lastBlockNumber) )
-          c.execute("insert into blocks values (?,?,?,?,?)",(latestBinary,lastBlockNumber,0,currentBlock.instrText,currentBlock.disasmText))
-          lastBlockNumber += 1
-        currentBlock = None
-      else:
-        currentBlock.append(instr,disasm)
-        currentBlock.length += len(instr) / 2
-    lastThread = thread
-  return knownBlocks
 
 def intWithCommas(x):
   if type(x) not in [type(0), type(0L)]:
@@ -161,7 +163,7 @@ def graphBinaries(c,binaryList):
   root = Tk()
   g = graphWindow(root)
   for binary in binaryList:
-    pass
+    g.graphRun(c,binary)
   root.mainloop() # return everything
   return
 
@@ -193,7 +195,7 @@ def main():
     dbFile = "default.db"
   conn = sqlite3.connect(dbFile)
   c = conn.cursor()
-  c.execute("create table if not exists instructions (binary integer,thread long,offset long,instr text,disasm text,tag char)")
+  # c.execute("create table if not exists instructions (binary integer,thread long,offset long,instr text,disasm text,tag char)")
   c.execute("create table if not exists binaries (binary integer primary key autoincrement,binaryname text, friendlyname text)")
   c.execute("create table if not exists modules (binary integer,modname text, start long, end long)")
   # ----------------------------------------------------------------------------------------------- #
@@ -203,11 +205,13 @@ def main():
   #  BINARY INTEGER                     -- binds block to binary                                    #
   #  BLOCKNUM INTEGER                   -- secondary key - unique id for blocks in an exe           #
   #  BLOCKREF INTEGER                   -- self-reference (i.e. if not 0, this block exists)        #
+  #  ADDR LONG                          -- where does this start                                    #
   #  BLOCKDATA TEXT                     -- blob of block's instructions                             #
   #  BLOCKDISASM TEXT                   -- blob of disassembled block                               #
+  #  RUNCOUNT INTEGER                   -- times block is run (at creation)                         #
   # )                                                                                               #
   # ----------------------------------------------------------------------------------------------- #
-  c.execute("create table if not exists blocks (binary integer, blocknum integer, blockref integer, blockdata text, blockdisasm text)")
+  c.execute("create table if not exists blocks (binary integer, blocknum integer, blockref integer, addr long, blockdata text, blockdisasm text, runcount integer)")
   conn.commit()
   for f in inFiles:
     storeFile(c,f)
@@ -217,31 +221,8 @@ def main():
     listBinaries(c)
   if operationGraphBinaries:
     graphBinaries(c,graphRuns)
-  #c.execute("select binary from binaries")
   #binaries = c.fetchall()
   return
-  #for row in binaries:
-  #  (binaryid,) = row
-  #  # print "searching for %d" % binaryid
-  #  c.execute("select count(*) from instructions where binary=%d" % binaryid)
-  #  instructionsPerRow = c.fetchall()
-  #  (instructionCount,) = instructionsPerRow[0]
-  #  print "loaded %d instructions found for binary %d" % (instructionCount,binaryid)
-  #  c.execute("select thread,tag,offset,instr from instructions where binary=%d" % binaryid)
-  #  instrList = c.fetchall()
-  #  knownBlocks = identifyBlocks(instrList)
-  #  print "top known blocks"
-  #  hotBlocks = 0
-  #  # from http://stackoverflow.com/questions/4010322/sort-a-list-of-class-instances-python
-  #  sortedBlocks = sorted(knownBlocks, key = operator.attrgetter('runTimes'))
-  #  for block in sortedBlocks:
-  #    if block.runTimes > 1:
-  #      print "+ block %08x byte len %d exec count %d" % (block.startOffset,block.length,block.runTimes)
-  #      hotBlocks += 1
-  #  print "hot blocks %d" % hotBlocks
-  #root = Tk()
-  #mainWindow = execGraph(root)
-  #root.mainloop()
 
 if __name__ == "__main__":
   main()

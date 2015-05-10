@@ -478,8 +478,8 @@ int handleFirstException(DEBUG_EVENT *de, int *firstException, unsigned long add
             }
             else
             {
-				printf("I:found base module");
-                printf("B:%08x:%08x\n", (unsigned long )me.modBaseAddr, (unsigned long )(me.modBaseAddr + me.modBaseSize));
+				// printf("I:found base module");
+                printf("B:BASE:%08x:%08x\n", (unsigned long )me.modBaseAddr, (unsigned long )(me.modBaseAddr + me.modBaseSize));
                 ti->startAddress = (unsigned long )me.modBaseAddr;
                 ti->endAddress = (unsigned long )(me.modBaseAddr + me.modBaseSize);
             }
