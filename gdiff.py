@@ -26,17 +26,24 @@ class graphWindow:
     c.execute("select binary from binaries where friendlyname = ?" , (friendlyname,))
     binaryIdTuple = c.fetchone()
     binaryId = binaryIdTuple[0]
-    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm from blocks where binary = ?", (binaryId,) )
+    c.execute("select start, end from modules where binary = ? and modname = ?", (binaryId,"BASE"))
+    (_start, _end) = c.fetchone()
+    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm,runcount from blocks where binary = ?", (binaryId,) )
     resultBlocks = c.fetchall()
     totalLength = 0
-    for (blocknum,blockref,offset,instr,disasm) in resultBlocks:
-      processBlocks[blocknum] = (blockref, offset, instr, disasm)
+    for (blocknum,blockref,offset,instr,disasm,runcount) in resultBlocks:
+      processBlocks[blocknum] = (blockref, offset, instr, disasm,runcount)
       if len(instr) == 0:
         totalLength += 1
       else:
         totalLength += len(instr) / 2
     for i in range(1,max(processBlocks.keys())):
-      (blockref, offset, instr, disasm) = processBlocks[i]
+      (blockref, offset, instr, disasm,runCount) = processBlocks[i]
+      if offset >= _start and offset <= _end:
+        if runCount > 1:
+          print "rectangle - %08x, runs %d\n%s" % (offset - _start, runCount,disasm),
+        else:
+          print "line - %s" % (disasm),
     print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
 
 class executionBlock:
@@ -48,8 +55,8 @@ class executionBlock:
     self.runTimes = 1
     
   def append(self,item,disasm):
-    self.instrText += item + "\n"
-    self.disasmText += disasm + "\n"
+    self.instrText += item
+    self.disasmText += disasm
     
 def usage():
   print "%s [args]"
