@@ -28,7 +28,7 @@ class graphWindow:
     binaryId = binaryIdTuple[0]
     c.execute("select start, end from modules where binary = ? and modname = ?", (binaryId,"BASE"))
     (_start, _end) = c.fetchone()
-    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm,runcount from blocks where binary = ?", (binaryId,) )
+    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm,runcount from blocks where binary = ? order by blocknum", (binaryId,) )
     resultBlocks = c.fetchall()
     totalLength = 0
     for (blocknum,blockref,offset,instr,disasm,runcount) in resultBlocks:
@@ -41,9 +41,9 @@ class graphWindow:
       (blockref, offset, instr, disasm,runCount) = processBlocks[i]
       if offset >= _start and offset <= _end:
         if runCount > 1:
-          print "rectangle - %08x, runs %d\n%s" % (offset - _start, runCount,disasm),
+          print "block - %08x, runs %d (%d)\n%s" % (offset - _start, runCount, i, disasm),
         else:
-          print "line - %s" % (disasm),
+          print "single run (%d) -\n%s" % (i,disasm),
     print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
 
 class executionBlock:
@@ -140,6 +140,27 @@ def storeFile(c,file):
         sys.exit(0)
     else:
       pass
+  # store our final block
+  print "storing final block"
+  currentBlock.append(instr,disasm)
+  currentBlock.length += len(instr) / 2
+  blockExists = False
+  print "ADDING FINAL BLOCK"
+  for (start, length, index) in knownOffsets:
+    if currentBlock.startOffset == start and currentBlock.length == length:
+      print "already stored (%d)" % lastBlockNumber
+      c.execute("insert into blocks values (?,?,?,?,?,?,0)",(latestBinary,lastBlockNumber,index,currentBlock.startOffset,"",""))  
+      runCounts[index] += 1
+      blockExists = True
+      break
+  if blockExists == False:
+    knownBlocks.append(currentBlock)
+    knownOffsets.append( (currentBlock.startOffset,currentBlock.length,lastBlockNumber) )
+    print "new block (%d)" % lastBlockNumber
+    c.execute("insert into blocks values (?,?,?,?,?,?,1)",(latestBinary,lastBlockNumber,0,currentBlock.startOffset,currentBlock.instrText,currentBlock.disasmText))
+    runCounts[lastBlockNumber] = 1
+    lastBlockNumber += 1
+  currentBlock = None
   # print "updating run counts..."
   for i in runCounts.keys():
     if runCounts[i] != 1:
