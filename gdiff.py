@@ -68,6 +68,9 @@ class graphWindow:
     print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
     print "painted on canvas length %d" % (modWidth)
 
+  def linkBlock(self,c,block1,block2):
+    
+
   def drawBlock(self,c,time,blockStart,blockEnd,runCount):
     startRectangleX = self.drawCursor
     startRectangleY = int( (blockStart - self._start) / self.zipRatio)
