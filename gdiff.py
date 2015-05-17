@@ -60,8 +60,8 @@ class graphWindow:
       i += 1
       processBlocks[blocknum] = (blockref, offset, instr, disasm,runcount)
       if len(instr) == 0:
+        self.drawCursor += 1
         totalLength += 1
-        # print "line"
       else:
         totalLength += len(instr) / 2
         self.drawBlock(self.graphCanvas,i,offset, offset + (len(instr) / 2), runcount)
@@ -72,9 +72,16 @@ class graphWindow:
     startRectangleX = self.drawCursor
     startRectangleY = int( (blockStart - self._start) / self.zipRatio)
     endRectangleX = self.drawCursor + (blockEnd - blockStart)
-    endRectangleY = int ( (blockEnd - self._start) / self.zipRatio)
-    print "create_rectangle (%d, %d, %d, %d), %f" % (startRectangleX, startRectangleY, endRectangleX, endRectangleY, self.zipRatio)
-    c.create_line(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
+    if (blockEnd - blockStart) + startRectangleY < 400:
+      print "rectangle"
+      endRectangleY = (blockEnd - blockStart) + startRectangleY
+      c.create_rectangle(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
+    else:
+      print "line"
+      endRectangleY = int ( (blockEnd - self._start) / self.zipRatio)
+      c.create_line(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
+    # print "create_rectangle (%d, %d, %d, %d), %f" % (startRectangleX, 0, endRectangleX, blockEnd - blockStart, self.zipRatio)
+    c.create_rectangle(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
     self.drawCursor = endRectangleX
 
 class executionBlock:
