@@ -15,36 +15,67 @@ class graphWindow:
   def __init__(self,parent):
     top = self.top = parent
     top.resizable(0,0)
-    top.title("the blind were born this way")
-    self.graphFrame = Frame(self.top,width=1200, height=400)
+    self.graphFrame = Frame(self.top,width=800,height=400)
     self.graphFrame.pack()
-    #self.graphCanvas = Canvas(self.graphFrame,width=1200,height=400)
-    #self.graphCanvas.pack()
+    top.title("the blind were born this way")
+    self.drawCursor = 0
+    self.zipRatio = 1.0
 
   def graphRun(self,c,friendlyname):
     processBlocks = {}
     c.execute("select binary from binaries where friendlyname = ?" , (friendlyname,))
-    binaryIdTuple = c.fetchone()
-    binaryId = binaryIdTuple[0]
+    (binaryId,) = c.fetchone()
     c.execute("select start, end from modules where binary = ? and modname = ?", (binaryId,"BASE"))
     (_start, _end) = c.fetchone()
-    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm,runcount from blocks where binary = ? order by blocknum", (binaryId,) )
+    self._start = _start
+    self.zipRatio = (_end - _start) / 400.0
+    self._shrinkRatio = 1.0 * ((_end - _start) / 1000)
+    c.execute("select max(runcount) from blocks where binary = ?", (binaryId,))
+    (maxRunCount,) = c.fetchone()
+    # draw the frame, now we know how big it is.
+    c.execute("select blocknum,blockref,addr,blockdata,blockdisasm,runcount from blocks where binary = ? order by blockid", (binaryId,) )
     resultBlocks = c.fetchall()
+    # ======================================
+    # GRAPHING MODEL 
+    # ======================================
+    # WIDTH = start to end execution
+    # HEIGHT = length of instruction
+    # COLOR = number of runs
+    # ======================================
+    # if a given block has 300 runs, we know it's "hot".
+    # ======================================
+    modWidth = len(resultBlocks)  # this is linear time progression
+    modHeight = 400               # this is "where in the executable"
+    print "creating graph window %d x %d" % (modWidth, modHeight)
+    self.graphCanvas = Canvas(self.graphFrame,width=800,height=400,scrollregion=(0,0,modWidth,400))
+    self.scrollbar = Scrollbar(self.graphFrame,orient=HORIZONTAL)
+    self.scrollbar.pack(side=BOTTOM,fill=X)
+    self.scrollbar.config(command=self.graphCanvas.xview)
+    self.graphCanvas.config(xscrollcommand = self.scrollbar.set)
+    self.graphCanvas.pack()
     totalLength = 0
+    # this is for each individual block + runcount
+    i = 0
     for (blocknum,blockref,offset,instr,disasm,runcount) in resultBlocks:
+      i += 1
       processBlocks[blocknum] = (blockref, offset, instr, disasm,runcount)
       if len(instr) == 0:
         totalLength += 1
+        # print "line"
       else:
         totalLength += len(instr) / 2
-    for i in range(1,max(processBlocks.keys())):
-      (blockref, offset, instr, disasm,runCount) = processBlocks[i]
-      if offset >= _start and offset <= _end:
-        if runCount > 1:
-          print "block - %08x, runs %d (%d)\n%s" % (offset - _start, runCount, i, disasm),
-        else:
-          print "single run (%d) -\n%s" % (i,disasm),
+        self.drawBlock(self.graphCanvas,i,offset, offset + (len(instr) / 2), runcount)
     print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
+    print "painted on canvas length %d" % (modWidth)
+
+  def drawBlock(self,c,time,blockStart,blockEnd,runCount):
+    startRectangleX = self.drawCursor
+    startRectangleY = int( (blockStart - self._start) / self.zipRatio)
+    endRectangleX = self.drawCursor + (blockEnd - blockStart)
+    endRectangleY = int ( (blockEnd - self._start) / self.zipRatio)
+    print "create_rectangle (%d, %d, %d, %d), %f" % (startRectangleX, startRectangleY, endRectangleX, endRectangleY, self.zipRatio)
+    c.create_line(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
+    self.drawCursor = endRectangleX
 
 class executionBlock:
   def __init__(self,offset,instr,disasm):
@@ -57,7 +88,7 @@ class executionBlock:
   def append(self,item,disasm):
     self.instrText += item
     self.disasmText += disasm
-    
+ 
 def usage():
   print "%s [args]"
   print "   -d [database.db]: load from or save to specific database file. if not supplied, default.db"
@@ -71,7 +102,7 @@ def storeFile(c,file):
   instructionCount = 0
   modtime = time.ctime(os.path.getmtime(file))
   longFileName = "%s-%s" % (file,modtime)
-  friendlyName = "%s-%04x" % (file,random.randint(0,0xFFFF))
+  friendlyName = "%04x"  % (random.randint(0,0xFFFF), )
   # try to fetch first.
   c.execute("select binary from binaries where binaryname = ?" , (longFileName,))
   binaries = c.fetchall()
@@ -113,14 +144,14 @@ def storeFile(c,file):
           for (start, length, index) in knownOffsets:
             if currentBlock.startOffset == start and currentBlock.length == length:
               # i.e. known block
-              c.execute("insert into blocks values (?,?,?,?,?,?,0)",(latestBinary,lastBlockNumber,index,currentBlock.startOffset,"",""))  
+              c.execute("insert into blocks values (null,?,?,?,?,?,?,0)",(latestBinary,lastBlockNumber,index,currentBlock.startOffset,"",""))  
               runCounts[index] += 1
               blockExists = True
               break
           if blockExists == False:          # already taken care of
             knownBlocks.append(currentBlock)
             knownOffsets.append( (currentBlock.startOffset,currentBlock.length,lastBlockNumber) )
-            c.execute("insert into blocks values (?,?,?,?,?,?,1)",(latestBinary,lastBlockNumber,0,currentBlock.startOffset,currentBlock.instrText,currentBlock.disasmText))
+            c.execute("insert into blocks values (null,?,?,?,?,?,?,1)",(latestBinary,lastBlockNumber,0,currentBlock.startOffset,currentBlock.instrText,currentBlock.disasmText))
             runCounts[lastBlockNumber] = 1
             lastBlockNumber += 1
           currentBlock = None
@@ -141,15 +172,12 @@ def storeFile(c,file):
     else:
       pass
   # store our final block
-  print "storing final block"
-  currentBlock.append(instr,disasm)
-  currentBlock.length += len(instr) / 2
   blockExists = False
   print "ADDING FINAL BLOCK"
   for (start, length, index) in knownOffsets:
     if currentBlock.startOffset == start and currentBlock.length == length:
       print "already stored (%d)" % lastBlockNumber
-      c.execute("insert into blocks values (?,?,?,?,?,?,0)",(latestBinary,lastBlockNumber,index,currentBlock.startOffset,"",""))  
+      c.execute("insert into blocks values (null,?,?,?,?,?,?,0)",(latestBinary,lastBlockNumber,index,currentBlock.startOffset,"",""))  
       runCounts[index] += 1
       blockExists = True
       break
@@ -157,11 +185,10 @@ def storeFile(c,file):
     knownBlocks.append(currentBlock)
     knownOffsets.append( (currentBlock.startOffset,currentBlock.length,lastBlockNumber) )
     print "new block (%d)" % lastBlockNumber
-    c.execute("insert into blocks values (?,?,?,?,?,?,1)",(latestBinary,lastBlockNumber,0,currentBlock.startOffset,currentBlock.instrText,currentBlock.disasmText))
+    c.execute("insert into blocks values (null,?,?,?,?,?,?,1)",(latestBinary,lastBlockNumber,0,currentBlock.startOffset,currentBlock.instrText,currentBlock.disasmText))
     runCounts[lastBlockNumber] = 1
     lastBlockNumber += 1
   currentBlock = None
-  # print "updating run counts..."
   for i in runCounts.keys():
     if runCounts[i] != 1:
       c.execute("update blocks set runcount = ? where blocknum = ?",(runCounts[i],i))
@@ -239,7 +266,7 @@ def main():
   #  RUNCOUNT INTEGER                   -- times block is run (at creation)                         #
   # )                                                                                               #
   # ----------------------------------------------------------------------------------------------- #
-  c.execute("create table if not exists blocks (binary integer, blocknum integer, blockref integer, addr long, blockdata text, blockdisasm text, runcount integer)")
+  c.execute("create table if not exists blocks (blockid integer primary key autoincrement,binary integer, blocknum integer, blockref integer, addr long, blockdata text, blockdisasm text, runcount integer)")
   conn.commit()
   for f in inFiles:
     storeFile(c,f)
@@ -249,7 +276,7 @@ def main():
     listBinaries(c)
   if operationGraphBinaries:
     graphBinaries(c,graphRuns)
-  #binaries = c.fetchall()
+  conn.close()
   return
 
 if __name__ == "__main__":
