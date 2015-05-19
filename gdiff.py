@@ -68,19 +68,19 @@ class graphWindow:
     print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
     print "painted on canvas length %d" % (modWidth)
 
-  def linkBlock(self,c,block1,block2):
-    
-
+  # start height is the start point of the block
+  # elapsed height is the size of the block
+  # width is the run count
   def drawBlock(self,c,time,blockStart,blockEnd,runCount):
     startRectangleX = self.drawCursor
     startRectangleY = int( (blockStart - self._start) / self.zipRatio)
-    endRectangleX = self.drawCursor + (blockEnd - blockStart)
+    endRectangleX = self.drawCursor + runCount
     if (blockEnd - blockStart) + startRectangleY < 400:
-      print "rectangle"
+      # print "rectangle"
       endRectangleY = (blockEnd - blockStart) + startRectangleY
       c.create_rectangle(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
-    else:
-      print "line"
+    else:        # why do we even need a line?
+      # print "line"
       endRectangleY = int ( (blockEnd - self._start) / self.zipRatio)
       c.create_line(startRectangleX, startRectangleY, endRectangleX, endRectangleY)
     # print "create_rectangle (%d, %d, %d, %d), %f" % (startRectangleX, 0, endRectangleX, blockEnd - blockStart, self.zipRatio)
