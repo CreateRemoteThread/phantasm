@@ -20,13 +20,26 @@ class graphWindow:
     top.title("the blind were born this way")
     self.drawCursor = 0
     self.zipRatio = 1.0
+    self.forceStart = 0
+    self.forceEnd = 0
+
+  def forceStartAddress(self,start):
+    self.forceStart = start
+
+  def forceEndAddress(self,end):
+    self.forceEnd = end
 
   def graphRun(self,c,friendlyname):
     processBlocks = {}
     c.execute("select binary from binaries where friendlyname = ?" , (friendlyname,))
     (binaryId,) = c.fetchone()
-    c.execute("select start, end from modules where binary = ? and modname = ?", (binaryId,"BASE"))
-    (_start, _end) = c.fetchone()
+    if self.forceStart == 0:
+      c.execute("select start, end from modules where binary = ? and modname = ?", (binaryId,"BASE"))
+      (_start, _end) = c.fetchone()
+      print "start - 0x%08x; end - 0x%08x" % (_start, _end)
+    else:
+      _start = self.forceStart
+      _end = self.forceEnd
     self._start = _start
     self.zipRatio = (_end - _start) / 400.0
     self._shrinkRatio = 1.0 * ((_end - _start) / 1000)
@@ -224,10 +237,13 @@ def listBinaries(c):
     print fname
 
 # only start TK here if needed.
-def graphBinaries(c,binaryList):
+def graphBinaries(c,binaryList,forceStart, forceEnd):
   root = Tk()
   g = graphWindow(root)
   for binary in binaryList:
+    if forceStart is not None:
+      g.forceStartAddress(forceStart)
+      g.forceEndAddress(forceEnd)
     g.graphRun(c,binary)
   root.mainloop() # return everything
   return
@@ -238,8 +254,10 @@ def main():
   graphRuns = []
   operationListBinaries = False
   operationGraphBinaries = False
+  forceStart = None
+  forceEnd = None
   try:
-    opts,args = getopt.getopt(sys.argv[1:],"d:f:lg:",["database=","file=","list","graph="])
+    opts,args = getopt.getopt(sys.argv[1:],"d:f:lg:s:e:",["database=","file=","list","graph="])
   except getopt.GetoptError as err:
     print str(err)
     sys.exit(0)
@@ -253,6 +271,10 @@ def main():
     elif o in ("-g","--graph"):
       operationGraphBinaries = True
       graphRuns.append(a)
+    elif o in ("-s"):
+      forceStart = int(a,16)
+    elif o in ("-e"):
+      forceEnd = int(a,16)
     else:
       usage()
       sys.exit(0)
@@ -285,7 +307,7 @@ def main():
   if operationListBinaries:
     listBinaries(c)
   if operationGraphBinaries:
-    graphBinaries(c,graphRuns)
+    graphBinaries(c,graphRuns,forceStart,forceEnd)
   conn.close()
   return
 
