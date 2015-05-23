@@ -65,6 +65,7 @@ class graphWindow:
     self.scrollbar.pack(side=BOTTOM,fill=X)
     self.scrollbar.config(command=self.graphCanvas.xview)
     self.graphCanvas.config(xscrollcommand = self.scrollbar.set)
+    self.graphCanvas.bind('<Motion>',self.motion)
     self.graphCanvas.pack()
     totalLength = 0
     # this is for each individual block + runcount
@@ -75,11 +76,20 @@ class graphWindow:
       if len(instr) == 0:
         self.drawCursor += 1
         totalLength += 1
+        self.drawLine(self.graphCanvas,offset)
       else:
         totalLength += len(instr) / 2
         self.drawBlock(self.graphCanvas,i,offset, offset + (len(instr) / 2), runcount)
     print "fetching run data for %s, %d results, %d total bytes" % (friendlyname, len(resultBlocks), totalLength)
     print "painted on canvas length %d" % (modWidth)
+
+  def motion(self,event):
+    print "%d" % (self.graphCanvas.canvasx(event.x))
+
+  def drawLine(self,c,blockStart):
+    lineY = int( (blockStart - self._start) / self.zipRatio)
+    # print "%d,%d" % (self.drawCursor,lineY)
+    c.create_line(self.drawCursor,lineY,self.drawCursor,lineY + 1)
 
   # start height is the start point of the block
   # elapsed height is the size of the block
