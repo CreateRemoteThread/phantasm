@@ -10,6 +10,7 @@ char *exeCmdLine = NULL;
 // read: http://stackoverflow.com/questions/7446887/get-command-line-string-of-64-bit-process-from-32-bit-process
 
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte);
+void scanModules64 (HANDLE hProcess, int dwProcessId);
 
 int main(int argc, char **argv)
 {
@@ -63,11 +64,13 @@ int main(int argc, char **argv)
 			case EXCEPTION_DEBUG_EVENT:
 				if (firstException == 1 && de.u.Exception.ExceptionRecord.ExceptionAddress == entryPoint)
 				{
+					scanModules64(pi.hProcess,de.dwProcessId);
 					handleFirstException(pi.hProcess,de.dwThreadId,firstByte);
 					firstException = 0;
 				}
-				else if (firstException == 1)
+				else if (firstException == 1) // this should probably be a toggle switch.
 				{
+					printf("* exception before firstException triggered\n");
 					ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 				}
 				else
@@ -87,6 +90,13 @@ int main(int argc, char **argv)
 	return 0;
 }
 
+
+void scanModules64 (HANDLE hProcess, int dwProcessId)
+{
+	
+	return;
+}
+
 // remove first exception
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 {
@@ -101,7 +111,7 @@ void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 	// 32-bit i Eip here - but it's always one byte because we write \xcc
 	c.Rip -= 1;
 
-	printf("* restoring...\n");
+	printf("* restoring firstException to %02x\n",(unsigned char )firstByte);
 	size_t bytes_written;
 	WriteProcessMemory(hProcess,(LPVOID )c.Rip,&firstByte,1,&bytes_written);
 
