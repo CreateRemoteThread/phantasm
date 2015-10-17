@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <windows.h>
-#include <Winternl.h>
+#include <winternl.h>
 
 char *exeFileName = NULL;
 char *exeWorkingDir = NULL;
@@ -11,6 +11,8 @@ char *exeCmdLine = NULL;
 
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte);
 void scanModules64 (HANDLE hProcess, int dwProcessId);
+
+typedef DWORD (WINAPI * _NtQueryInformationProcess) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG,PULONG);
 
 int main(int argc, char **argv)
 {
@@ -28,7 +30,17 @@ int main(int argc, char **argv)
 	int mRet = CreateProcess("test64.exe","test64.exe",NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,"c:\\projects\\phantasm\\",&si,&pi);
 	size_t bytes_read;
 
+
+	_NtQueryInformationProcess NtQueryInformationProcess;
+	HMODULE ntDll = LoadLibrary("ntdll");
+	NtQueryInformationProcess = (_NtQueryInformationProcess) (GetProcAddress(ntDll, "NtQueryInformationProcess"));
+
 	PROCESS_BASIC_INFORMATION *pbi = (PROCESS_BASIC_INFORMATION *)malloc(sizeof(PROCESS_BASIC_INFORMATION));
+	NtQueryInformationProcess(pi.hProcess,ProcessBasicInformation,pbi,sizeof(PROCESS_BASIC_INFORMATION),NULL);
+
+	// int processId = GetProcessId(pi.hProcess);
+	//int *u = (int *)(pbi->UniqueProcessId);
+	//printf("* getprocessid says %d, peb says %d\n",processId,u[0]);
 	printf("* peb base = %016x\n",pbi->PebBaseAddress);
 	PEB pebBuffer;
 	ReadProcessMemory(pi.hProcess,pbi->PebBaseAddress,&pebBuffer,sizeof(PEB),&bytes_read);
@@ -40,7 +52,10 @@ int main(int argc, char **argv)
 
 	ReadProcessMemory(pi.hProcess,ImageBaseAddress,imgDosHdr,sizeof(IMAGE_DOS_HEADER),&bytes_read);
 	printf("* reading IMAGE_DOS_HEADER at %016x, magic is %x\n",ImageBaseAddress,imgDosHdr->e_magic);
-
+	if (imgDosHdr->e_magic != 0x5a4d)
+	{
+		return 0;
+	}
 	ReadProcessMemory(pi.hProcess,ImageBaseAddress + imgDosHdr->e_lfanew,imgNtHdrs,sizeof(IMAGE_NT_HEADERS),&bytes_read);
 	printf("* reading IMAGE_NT_HEADERS at %016x, signature is %x\n",ImageBaseAddress + imgDosHdr->e_lfanew,imgNtHdrs->Signature);
 
