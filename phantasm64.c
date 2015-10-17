@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <windows.h>
 #include <winternl.h>
+#include <psapi.h>
+
+#pragma comment(lib,"psapi.lib")
+
 
 char *exeFileName = NULL;
 char *exeWorkingDir = NULL;
@@ -10,9 +14,19 @@ char *exeCmdLine = NULL;
 // read: http://stackoverflow.com/questions/7446887/get-command-line-string-of-64-bit-process-from-32-bit-process
 
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte);
-void scanModules64 (HANDLE hProcess, int dwProcessId);
+void SetSingleStep(HANDLE hThread, int stepmode);
 
 typedef DWORD (WINAPI * _NtQueryInformationProcess) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG,PULONG);
+
+void SetSingleStep(HANDLE hThread, int stepmode)
+{
+	CONTEXT c;
+	memset(&c,0,sizeof(CONTEXT));
+	c.ContextFlags = CONTEXT_FULL;
+	GetThreadContext(hThread,&c);
+	c.EFlags |= 0x00000100;
+	SetThreadContext(hThread,&c);
+}
 
 int main(int argc, char **argv)
 {
@@ -29,7 +43,6 @@ int main(int argc, char **argv)
 
 	int mRet = CreateProcess("test64.exe","test64.exe",NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,"c:\\projects\\phantasm\\",&si,&pi);
 	size_t bytes_read;
-
 
 	_NtQueryInformationProcess NtQueryInformationProcess;
 	HMODULE ntDll = LoadLibrary("ntdll");
@@ -67,9 +80,31 @@ int main(int argc, char **argv)
 	WriteProcessMemory(pi.hProcess,entryPoint,"\xCC",1,&bytes_read);
 	int firstException = 1;
 
+	// messy as fuck, fix it later.
+	HANDLE hThread = NULL;
+	int expectAccessViolation = FALSE;
+
+	LPVOID moduleAddress[1024];
+	DWORD moduleSize[1024];
+
+	memset(moduleAddress,0,sizeof(LPVOID) * 1024);
+	memset(moduleSize,0,sizeof(DWORD) * 1024);
+	int numModules = 0;
+
+	CONTEXT c;
+
+	LPVOID coreModAddress = NULL;
+	DWORD coreModSize = 0;
+
+	DWORD oldProtect = 0;
+
 	while(continueDebugging)
 	{
 		WaitForDebugEvent(&de,INFINITE);
+		if (hThread == NULL)
+		{
+			hThread = OpenThread(THREAD_GET_CONTEXT | THREAD_SET_CONTEXT,FALSE,de.dwThreadId);
+		}
 		switch(de.dwDebugEventCode)
 		{
 			case EXIT_PROCESS_DEBUG_EVENT:
@@ -79,8 +114,30 @@ int main(int argc, char **argv)
 			case EXCEPTION_DEBUG_EVENT:
 				if (firstException == 1 && de.u.Exception.ExceptionRecord.ExceptionAddress == entryPoint)
 				{
-					scanModules64(pi.hProcess,de.dwProcessId);
+					printf(" + scan modules\n");
+					// -- begin code to scan modules --
+					HMODULE hMods[1024];
+					MODULEINFO mi;
+					DWORD cbNeeded;
+					int i;
+					EnumProcessModules(pi.hProcess,hMods,sizeof(hMods),&cbNeeded);
+					for ( i = 0; i < (cbNeeded / sizeof(HMODULE)); i++ )
+					{
+						GetModuleInformation(pi.hProcess,hMods[i],&mi,sizeof(mi));
+						moduleAddress[numModules] = mi.lpBaseOfDll;
+						moduleSize[numModules] = mi.SizeOfImage;
+						if(mi.lpBaseOfDll == (LPVOID )ImageBaseAddress)
+						{
+							printf("C found core module, saving...\n");
+							coreModAddress = mi.lpBaseOfDll;
+							coreModSize = mi.SizeOfImage;
+						}
+						printf("M %016x to %016x\n",(DWORD64 )moduleAddress[numModules],(DWORD64 )moduleAddress[numModules] + moduleSize[numModules]);
+						numModules++;
+					}
+					// -- end code to scan modules --
 					handleFirstException(pi.hProcess,de.dwThreadId,firstByte);
+					SetSingleStep(hThread,1);
 					firstException = 0;
 				}
 				else if (firstException == 1) // this should probably be a toggle switch.
@@ -90,13 +147,38 @@ int main(int argc, char **argv)
 				}
 				else
 				{
-					printf("* exception... %016x\n",(DWORD64 )de.u.Exception.ExceptionRecord.ExceptionAddress);
-					ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
-					ExitProcess(0);
+					if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_SINGLE_STEP && expectAccessViolation == FALSE)
+					{
+						printf("+ single step\n");
+						memset(&c,0,sizeof(c));
+						expectAccessViolation = TRUE;
+						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_READWRITE,&oldProtect);
+						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
+					}
+					else if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE)
+					{
+						printf("- NEW INSTRUCTION\n");
+						//c.ContextFlags = CONTEXT_FULL;
+						//GetThreadContext(hThread,&c);
+						//c.EFlags |= 0x00000100;
+						//SetThreadContext(hThread,&c);
+						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,oldProtect,NULL);
+						expectAccessViolation = FALSE;
+					}
+					else
+					{
+						printf("* exception... %016x\n",(DWORD64 )de.u.Exception.ExceptionRecord.ExceptionAddress);
+						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
+						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
+						{
+							printf("* this is a second try exception, failing.");
+							ExitProcess(0);
+						}
+					}
 				}
 				break;
 			default:
-				printf("* +1\n");
+				ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 				break;
 		}
         ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
@@ -105,12 +187,6 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-
-void scanModules64 (HANDLE hProcess, int dwProcessId)
-{
-	
-	return;
-}
 
 // remove first exception
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
