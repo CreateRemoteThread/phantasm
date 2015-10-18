@@ -6,7 +6,6 @@
 
 #pragma comment(lib,"psapi.lib")
 
-
 char *exeFileName = NULL;
 char *exeWorkingDir = NULL;
 char *exeCmdLine = NULL;
@@ -97,6 +96,7 @@ int main(int argc, char **argv)
 	DWORD coreModSize = 0;
 
 	DWORD oldProtect = 0;
+	DWORD discard;
 
 	while(continueDebugging)
 	{
@@ -135,7 +135,6 @@ int main(int argc, char **argv)
 						printf("M %016x to %016x\n",(DWORD64 )moduleAddress[numModules],(DWORD64 )moduleAddress[numModules] + moduleSize[numModules]);
 						numModules++;
 					}
-					// -- end code to scan modules --
 					handleFirstException(pi.hProcess,de.dwThreadId,firstByte);
 					SetSingleStep(hThread,1);
 					firstException = 0;
@@ -147,27 +146,19 @@ int main(int argc, char **argv)
 				}
 				else
 				{
-					if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_SINGLE_STEP && expectAccessViolation == FALSE)
+					if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_SINGLE_STEP)
 					{
-						printf("+ single step\n");
-						memset(&c,0,sizeof(c));
-						expectAccessViolation = TRUE;
-						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_READWRITE,&oldProtect);
+						c.ContextFlags = CONTEXT_FULL;
+						GetThreadContext(hThread,&c);
+						printf("+ single step ExceptionAddress = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
+						// if the instruction is within our "trace bounds", trace it. otherwise, don't worry.
+
+						SetSingleStep(hThread,1);
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
-					}
-					else if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE)
-					{
-						printf("- NEW INSTRUCTION\n");
-						//c.ContextFlags = CONTEXT_FULL;
-						//GetThreadContext(hThread,&c);
-						//c.EFlags |= 0x00000100;
-						//SetThreadContext(hThread,&c);
-						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,oldProtect,NULL);
-						expectAccessViolation = FALSE;
 					}
 					else
 					{
-						printf("* exception... %016x\n",(DWORD64 )de.u.Exception.ExceptionRecord.ExceptionAddress);
+						printf("* exception... (%x) %016x\n",de.u.Exception.ExceptionRecord.ExceptionCode,(DWORD64 )de.u.Exception.ExceptionRecord.ExceptionAddress);
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
 						{
@@ -175,6 +166,15 @@ int main(int argc, char **argv)
 							ExitProcess(0);
 						}
 					}
+
+					/*else if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE)
+					{
+						printf("- new instruction at %016x, resetting to %x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, oldProtect);
+						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,oldProtect,&discard);
+						expectAccessViolation = FALSE;
+						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
+					}*/
+
 				}
 				break;
 			default:
