@@ -3,8 +3,13 @@
 #include <windows.h>
 #include <winternl.h>
 #include <psapi.h>
+#include <beaengine/beaengine.h>
 
 #pragma comment(lib,"psapi.lib")
+
+#define STATE_NONE 0
+#define STATE_STARTCALL 1
+#define STATE_CALLDONE 2
 
 char *exeFileName = NULL;
 char *exeWorkingDir = NULL;
@@ -14,6 +19,7 @@ char *exeCmdLine = NULL;
 
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte);
 void SetSingleStep(HANDLE hThread, int stepmode);
+void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d);
 
 typedef DWORD (WINAPI * _NtQueryInformationProcess) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG,PULONG);
 
@@ -29,6 +35,7 @@ void SetSingleStep(HANDLE hThread, int stepmode)
 
 int main(int argc, char **argv)
 {
+	DISASM d;
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
 
@@ -98,6 +105,8 @@ int main(int argc, char **argv)
 	DWORD oldProtect = 0;
 	DWORD discard;
 
+	DWORD callState = STATE_NONE;
+
 	while(continueDebugging)
 	{
 		WaitForDebugEvent(&de,INFINITE);
@@ -151,9 +160,40 @@ int main(int argc, char **argv)
 						c.ContextFlags = CONTEXT_FULL;
 						GetThreadContext(hThread,&c);
 						printf("+ single step ExceptionAddress = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
-						// if the instruction is within our "trace bounds", trace it. otherwise, don't worry.
-
+						if(callState == STATE_NONE)
+						{
+							lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
+							if (d.Instruction.BranchType != 0)
+							{
+								printf("+ JMP\n");
+								expectAccessViolation = TRUE;
+								printf("C1\n");
+								// VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_READWRITE,&oldProtect);
+								callState = STATE_STARTCALL;
+								SetSingleStep(hThread,1);
+							}
+							else
+							{
+								printf("X");
+								SetSingleStep(hThread,1);
+							}
+						}
+						else if(callState == STATE_STARTCALL)
+						{
+							printf("C2\n");
+							VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_READWRITE,&oldProtect);
+							callState = STATE_NONE;
+						}
+						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
+					}
+					else if(de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE && ( \
+						de.u.Exception.ExceptionRecord.ExceptionAddress > coreModAddress && \
+						de.u.Exception.ExceptionRecord.ExceptionAddress < (LPVOID )((DWORD64 )coreModAddress + coreModSize )) ){
+						printf("* EXPECTED access violation at %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress);
 						SetSingleStep(hThread,1);
+						expectAccessViolation=FALSE;
+						// does this silently fail or break DEP? note to self, check from 32-bit phantasm
+						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_EXECUTE_READ,&oldProtect);
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
 					}
 					else
@@ -162,19 +202,11 @@ int main(int argc, char **argv)
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
 						{
-							printf("* this is a second try exception, failing.");
+							lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
+							printf("* this is a second try exception, failing. (%s)\n",d.CompleteInstr);
 							ExitProcess(0);
 						}
 					}
-
-					/*else if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE)
-					{
-						printf("- new instruction at %016x, resetting to %x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, oldProtect);
-						VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,oldProtect,&discard);
-						expectAccessViolation = FALSE;
-						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_CONTINUE);
-					}*/
-
 				}
 				break;
 			default:
@@ -209,5 +241,23 @@ void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 	SetThreadContext(hThread,&c);
 	
 	CloseHandle(hThread);
+	return;
+}
+
+void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d)
+{
+	/*
+	2.3.11 AVX Instruction Length
+	The maximum length of an Intel 64 and IA-32 instruction remains 15 bytes.
+	*/
+	char memChunk[15];
+	size_t bR;
+
+	ReadProcessMemory(hProcess,rip,(LPVOID )memChunk,15,&bR);
+	memset(d,0,sizeof(DISASM));
+	d->EIP = (UIntPtr )memChunk;
+
+	int len = Disasm(d);
+
 	return;
 }
