@@ -7,6 +7,9 @@
 
 #pragma comment(lib,"psapi.lib")
 
+// switch out for 32-bit.
+#define REGISTER_LENGTH DWORD64
+
 #define STATE_NONE 0
 #define STATE_STARTCALL 1
 #define STATE_CALLDONE 2
@@ -36,6 +39,10 @@ void SetSingleStep(HANDLE hThread, int stepmode)
 int main(int argc, char **argv)
 {
 	DISASM d;
+	#if REGISTER_LENGTH == DWORD64
+		d.Archi=64;
+	#endif
+
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
 
@@ -141,7 +148,7 @@ int main(int argc, char **argv)
 							coreModAddress = mi.lpBaseOfDll;
 							coreModSize = mi.SizeOfImage;
 						}
-						printf("M %016x to %016x\n",(DWORD64 )moduleAddress[numModules],(DWORD64 )moduleAddress[numModules] + moduleSize[numModules]);
+						printf("M %016x to %016x\n",(REGISTER_LENGTH )moduleAddress[numModules],(REGISTER_LENGTH )moduleAddress[numModules] + moduleSize[numModules]);
 						numModules++;
 					}
 					handleFirstException(pi.hProcess,de.dwThreadId,firstByte);
@@ -159,7 +166,7 @@ int main(int argc, char **argv)
 					{
 						c.ContextFlags = CONTEXT_FULL;
 						GetThreadContext(hThread,&c);
-						printf("+ single step ExceptionAddress = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
+						printf("+ single step Exception - Address = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
 						if(callState == STATE_NONE)
 						{
 							lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
@@ -188,7 +195,7 @@ int main(int argc, char **argv)
 					}
 					else if(de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE && ( \
 						de.u.Exception.ExceptionRecord.ExceptionAddress > coreModAddress && \
-						de.u.Exception.ExceptionRecord.ExceptionAddress < (LPVOID )((DWORD64 )coreModAddress + coreModSize )) ){
+						de.u.Exception.ExceptionRecord.ExceptionAddress < (LPVOID )((REGISTER_LENGTH )coreModAddress + coreModSize )) ){
 						printf("* EXPECTED access violation at %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress);
 						SetSingleStep(hThread,1);
 						expectAccessViolation=FALSE;
@@ -198,7 +205,7 @@ int main(int argc, char **argv)
 					}
 					else
 					{
-						printf("* exception... (%x) %016x\n",de.u.Exception.ExceptionRecord.ExceptionCode,(DWORD64 )de.u.Exception.ExceptionRecord.ExceptionAddress);
+						printf("* exception... (%x) %016x\n",de.u.Exception.ExceptionRecord.ExceptionCode,(REGISTER_LENGTH )de.u.Exception.ExceptionRecord.ExceptionAddress);
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
 						{
@@ -254,7 +261,7 @@ void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d)
 	size_t bR;
 
 	ReadProcessMemory(hProcess,rip,(LPVOID )memChunk,15,&bR);
-	memset(d,0,sizeof(DISASM));
+	// memset(d,0,sizeof(DISASM));
 	d->EIP = (UIntPtr )memChunk;
 
 	int len = Disasm(d);
