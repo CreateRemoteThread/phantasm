@@ -166,28 +166,30 @@ int main(int argc, char **argv)
 					{
 						c.ContextFlags = CONTEXT_FULL;
 						GetThreadContext(hThread,&c);
-						printf("+ single step Exception - Address = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
+						lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
+						printf(" + %s\n",d.CompleteInstr);
+						// printf("+ single step Exception - Address = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
 						if(callState == STATE_NONE)
 						{
 							lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
 							if (d.Instruction.BranchType != 0)
 							{
-								printf("+ JMP\n");
+								// printf("+ JMP\n");
 								expectAccessViolation = TRUE;
-								printf("C1\n");
+								// printf("C1\n");
 								// VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_READWRITE,&oldProtect);
 								callState = STATE_STARTCALL;
 								SetSingleStep(hThread,1);
 							}
 							else
 							{
-								printf("X");
+								// printf("X");
 								SetSingleStep(hThread,1);
 							}
 						}
 						else if(callState == STATE_STARTCALL)
 						{
-							printf("C2\n");
+							// printf("C2\n");
 							VirtualProtectEx(pi.hProcess,coreModAddress,coreModSize,PAGE_READWRITE,&oldProtect);
 							callState = STATE_NONE;
 						}
@@ -196,7 +198,10 @@ int main(int argc, char **argv)
 					else if(de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && expectAccessViolation == TRUE && ( \
 						de.u.Exception.ExceptionRecord.ExceptionAddress > coreModAddress && \
 						de.u.Exception.ExceptionRecord.ExceptionAddress < (LPVOID )((REGISTER_LENGTH )coreModAddress + coreModSize )) ){
-						printf("* EXPECTED access violation at %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress);
+						if (de.u.Exception.ExceptionRecord.ExceptionAddress)
+						{
+						}
+						printf(" C calling %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress);
 						SetSingleStep(hThread,1);
 						expectAccessViolation=FALSE;
 						// does this silently fail or break DEP? note to self, check from 32-bit phantasm
