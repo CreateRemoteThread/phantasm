@@ -17,7 +17,7 @@ class graphWindow:
     top.resizable(0,0)
     self.graphFrame = Frame(self.top,width=800,height=400)
     self.graphFrame.pack()
-    top.title("the blind were born this way")
+    top.title("v0p1")
     self.drawCursor = 0
     self.zipRatio = 1.0
     self.forceStart = 0
