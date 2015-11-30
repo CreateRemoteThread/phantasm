@@ -167,6 +167,7 @@ int main(int argc, char **argv)
 						c.ContextFlags = CONTEXT_FULL;
 						GetThreadContext(hThread,&c);
 						lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
+						// handle each instruction
 						printf(" + %s\n",d.CompleteInstr);
 						// printf("+ single step Exception - Address = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
 						if(callState == STATE_NONE)
@@ -266,7 +267,6 @@ void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d)
 	size_t bR;
 
 	ReadProcessMemory(hProcess,rip,(LPVOID )memChunk,15,&bR);
-	// memset(d,0,sizeof(DISASM));
 	d->EIP = (UIntPtr )memChunk;
 
 	int len = Disasm(d);
