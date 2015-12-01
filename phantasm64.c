@@ -54,7 +54,79 @@ int main(int argc, char **argv)
 	DEBUG_EVENT de;
 	memset(&de,0,sizeof(de));
 
-	int mRet = CreateProcess("test64.exe","test64.exe",NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,"c:\\projects\\phantasm\\",&si,&pi);
+	char *exeFileName = NULL;
+	char *exeWorkingDir = NULL;
+	char *exeCmdLine = NULL;
+
+	exeFileName = (char *)malloc(MAX_PATH+1);
+	exeWorkingDir = (char *)malloc(MAX_PATH+1);
+	exeCmdLine = (char *)malloc(MAX_PATH+1);
+
+	memset(exeFileName,0,MAX_PATH+1);
+	memset(exeWorkingDir,0,MAX_PATH+1);
+	memset(exeCmdLine,0,MAX_PATH+1);
+
+    GetCurrentDirectory(MAX_PATH,exeWorkingDir);
+
+	int exeCmdLineLen = 0;
+	int i = 1;
+
+	for(;i < argc;i++)
+    {
+		exeCmdLineLen += strlen(argv[i]) + 1;
+    }
+
+	i = 1;
+
+	for(;i < argc;i++)
+    {
+        if(exeCmdLine[0] == '\0')
+        {
+            strcpy(exeCmdLine,argv[i]);
+        }
+        else
+        {
+            strcat(exeCmdLine,argv[i]);
+        }
+        strcat(exeCmdLine," ");
+    }
+
+	if(exeCmdLine[0] == '"')
+    {
+        // printf("* culling cmdline\n");
+        i = 1;
+        while(exeCmdLine[i++] != '"') {} ;
+    }
+    else
+    {
+		if(strstr(exeCmdLine,".exe") != NULL)
+		{
+			i = (int )(strstr(exeCmdLine,".exe") - (char *)exeCmdLine);
+			
+			i += 4;
+		}
+		else
+		{
+			printf("E:need to specify an exe file\n");
+			exit(0);
+		}
+    }
+
+	/*
+	// pretty sure i was high when i wrote this
+	if(i == 15)
+    {
+        printf("E:malloc fails when cmdline is 15 bytes long\n");
+		exit(0);
+    }
+	*/
+
+	exeFileName = (char *)malloc(i + 1);
+    memset(exeFileName,0,strlen(exeCmdLine) + 1);
+    exeFileName[i] = '\0';
+    strcpy(exeFileName,exeCmdLine);
+
+	int mRet = CreateProcess(exeFileName,exeCmdLine,NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,exeWorkingDir,&si,&pi);
 	size_t bytes_read;
 
 	_NtQueryInformationProcess NtQueryInformationProcess;
@@ -135,7 +207,6 @@ int main(int argc, char **argv)
 					HMODULE hMods[1024];
 					MODULEINFO mi;
 					DWORD cbNeeded;
-					int i;
 					EnumProcessModules(pi.hProcess,hMods,sizeof(hMods),&cbNeeded);
 					for ( i = 0; i < (cbNeeded / sizeof(HMODULE)); i++ )
 					{
@@ -167,7 +238,6 @@ int main(int argc, char **argv)
 						c.ContextFlags = CONTEXT_FULL;
 						GetThreadContext(hThread,&c);
 						lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
-						// handle each instruction
 						printf(" + %s\n",d.CompleteInstr);
 						// printf("+ single step Exception - Address = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
 						if(callState == STATE_NONE)
@@ -267,6 +337,7 @@ void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d)
 	size_t bR;
 
 	ReadProcessMemory(hProcess,rip,(LPVOID )memChunk,15,&bR);
+	// memset(d,0,sizeof(DISASM));
 	d->EIP = (UIntPtr )memChunk;
 
 	int len = Disasm(d);
