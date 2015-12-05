@@ -22,7 +22,8 @@ char *exeCmdLine = NULL;
 
 void handleFirstException(HANDLE hProcess,int threadId,char firstByte);
 void SetSingleStep(HANDLE hThread, int stepmode);
-void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d);
+void lookAhead(HANDLE hProcess, LPVOID pc, DISASM *d);
+void testLookAhead(DISASM *d);
 
 typedef DWORD (WINAPI * _NtQueryInformationProcess) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG,PULONG);
 
@@ -40,9 +41,12 @@ int main(int argc, char **argv)
 {
 	DISASM d;
 	#if REGISTER_LENGTH == DWORD64
-		d.Archi=64;
+		#define ARCHI 64
+		#define PC_REG Rip
+	#else
+		#define ARCHI 32
+		#define PC_REG Eip
 	#endif
-
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
 
@@ -222,6 +226,10 @@ int main(int argc, char **argv)
 						printf("M %016x to %016x\n",(REGISTER_LENGTH )moduleAddress[numModules],(REGISTER_LENGTH )moduleAddress[numModules] + moduleSize[numModules]);
 						numModules++;
 					}
+					c.ContextFlags = CONTEXT_FULL;
+					GetThreadContext(hThread,&c);
+					lookAhead(pi.hProcess,(LPVOID )c.PC_REG,&d);
+					printf(" %s\n",c.PC_REG,d.CompleteInstr);
 					handleFirstException(pi.hProcess,de.dwThreadId,firstByte);
 					SetSingleStep(hThread,1);
 					firstException = 0;
@@ -235,14 +243,16 @@ int main(int argc, char **argv)
 				{
 					if (de.u.Exception.ExceptionRecord.ExceptionCode == EXCEPTION_SINGLE_STEP)
 					{
+						// multithreading makes me a sadpanda.
+						// printf(" [T:%X] ",de.dwThreadId);
 						c.ContextFlags = CONTEXT_FULL;
 						GetThreadContext(hThread,&c);
-						lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
-						printf(" + %s\n",d.CompleteInstr);
-						// printf("+ single step Exception - Address = %016x, Rip = %016x\n",de.u.Exception.ExceptionRecord.ExceptionAddress, c.Rip);
+						lookAhead(pi.hProcess,(LPVOID )c.PC_REG,&d);
+						printf(" %s\n",d.CompleteInstr);
 						if(callState == STATE_NONE)
 						{
-							lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
+							// not required
+							// lookAhead(pi.hProcess,(LPVOID )c.PC_REG,&d);
 							if (d.Instruction.BranchType != 0)
 							{
 								// printf("+ JMP\n");
@@ -285,7 +295,7 @@ int main(int argc, char **argv)
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
 						{
-							lookAhead(pi.hProcess,(LPVOID )c.Rip,&d);
+							lookAhead(pi.hProcess,(LPVOID )c.PC_REG,&d);
 							printf("* this is a second try exception, failing. (%s)\n",d.CompleteInstr);
 							ExitProcess(0);
 						}
@@ -315,11 +325,11 @@ void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 	GetThreadContext(hThread,&c);
 
 	// 32-bit i Eip here - but it's always one byte because we write \xcc
-	c.Rip -= 1;
+	c.PC_REG -= 1;
 
 	printf("* restoring firstException to %02x\n",(unsigned char )firstByte);
 	size_t bytes_written;
-	WriteProcessMemory(hProcess,(LPVOID )c.Rip,&firstByte,1,&bytes_written);
+	WriteProcessMemory(hProcess,(LPVOID )c.PC_REG,&firstByte,1,&bytes_written);
 
 	SetThreadContext(hThread,&c);
 	
@@ -327,20 +337,30 @@ void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 	return;
 }
 
-void lookAhead(HANDLE hProcess, LPVOID rip, DISASM *d)
+void lookAhead(HANDLE hProcess, LPVOID pc, DISASM *d)
 {
+
 	/*
 	2.3.11 AVX Instruction Length
 	The maximum length of an Intel 64 and IA-32 instruction remains 15 bytes.
 	*/
 	char memChunk[15];
-	size_t bR;
+	size_t bR = 0;
 
-	ReadProcessMemory(hProcess,rip,(LPVOID )memChunk,15,&bR);
-	// memset(d,0,sizeof(DISASM));
+	ReadProcessMemory(hProcess,pc,(LPVOID )memChunk,15,&bR);
+	memset(d,0,sizeof(DISASM));
+	d->Archi = ARCHI;
 	d->EIP = (UIntPtr )memChunk;
 
+	// prettyPrint(memChunk);
+	// why does this get pretty-printed twice?☼
 	int len = Disasm(d);
+	int i = 0;
+	printf(" [bR:%d:%d] %x: ",bR,d->Archi,pc);
+	for(; i < len;i++)
+	{
+		printf("%02x ",(unsigned char )memChunk[i]);
+	}
 
 	return;
 }

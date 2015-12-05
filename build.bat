@@ -1,5 +1,7 @@
 @echo off
 
+del *.obj
+
 IF [%1]==[64] cl /c /I beainclude /Tpphantasm64.c
 IF [%1]==[64] link /out:phantasm64.exe phantasm64.obj beasrc/BeaEngine.obj
 
