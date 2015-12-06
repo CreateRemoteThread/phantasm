@@ -6,6 +6,7 @@
 #include <beaengine/beaengine.h>
 
 #include "oracle.h"
+#include "tinker.h"
 
 #pragma comment(lib,"psapi.lib")
 
@@ -32,6 +33,7 @@ void SetSingleStep(HANDLE hThread, int stepmode);
 void lookAhead(HANDLE hProcess, HANDLE hThread, LPVOID pc_, DISASM *d);
 char *guessWorkDir (char *path);
 void handleSecondTry(HANDLE hProcess,HANDLE hThread,DEBUG_EVENT *de);
+void miniDebugger(PROCESS_INFORMATION *pi, DEBUG_EVENT *de);
 
 typedef DWORD (WINAPI * _NtQueryInformationProcess) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG,PULONG);
 
@@ -215,7 +217,7 @@ int main(int argc, char **argv)
 				continueDebugging = 0;
 				break;
 			case LOAD_DLL_DEBUG_EVENT:
-				scanExportTables(pi.hProcess);
+				// scanExportTables(pi.hProcess,);
 				break;
 			case EXCEPTION_DEBUG_EVENT:
 				if (firstException == 1 && de.u.Exception.ExceptionRecord.ExceptionAddress == entryPoint)
@@ -312,7 +314,8 @@ int main(int argc, char **argv)
 						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
 						{
 							handleSecondTry(pi.hProcess,hThread,&de);
-							ExitProcess(0);
+							miniDebugger(&pi,&de);
+							// ExitProcess(0);
 						}
 					}
 				}

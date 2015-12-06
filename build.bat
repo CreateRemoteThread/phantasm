@@ -4,7 +4,8 @@ del *.obj
 
 IF [%1]==[64] cl /c /I beainclude /Tpphantasm64.c
 IF [%1]==[64] cl /c /Tporacle.c
-IF [%1]==[64] link /out:phantasm64.exe phantasm64.obj oracle.obj beasrc/BeaEngine.obj
+IF [%1]==[64] cl /c /Tptinker.c
+IF [%1]==[64] link /out:phantasm64.exe phantasm64.obj oracle.obj tinker.obj beasrc/BeaEngine.obj
 
 IF [%1]==[32] cl /c /I beainclude /Tpphantasm64.c
 IF [%1]==[32] cl /c /Tporacle.c
