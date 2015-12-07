@@ -310,13 +310,13 @@ int main(int argc, char **argv)
 					else
 					{
 						printf("* exception... (%x) %016x\n",de.u.Exception.ExceptionRecord.ExceptionCode,(REGISTER_LENGTH )de.u.Exception.ExceptionRecord.ExceptionAddress);
-						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 						if(de.u.Exception.dwFirstChance == 0) // i.e. we didn't handle this.
 						{
 							handleSecondTry(pi.hProcess,hThread,&de);
 							miniDebugger(&pi,&de);
 							// ExitProcess(0);
 						}
+						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 					}
 				}
 				break;
