@@ -31,6 +31,7 @@ void lookAhead(HANDLE hProcess, HANDLE hThread, LPVOID pc_, DISASM *d);
 char *guessWorkDir (char *path);
 void handleSecondTry(HANDLE hProcess,HANDLE hThread,DEBUG_EVENT *de);
 void miniDebugger(PROCESS_INFORMATION *pi, DEBUG_EVENT *de);
+// execOptions *buildCommandLine(int argc, char **argv, char *exeFileName, char *exeCmdLine);
 
 typedef DWORD (WINAPI * _NtQueryInformationProcess) (HANDLE, PROCESSINFOCLASS, PVOID, ULONG,PULONG);
 
@@ -72,17 +73,14 @@ int main(int argc, char **argv)
 	char *exeCmdLine = NULL;
 
 	exeFileName = (char *)malloc(MAX_PATH+1);
-	// exeWorkingDir = (char *)malloc(MAX_PATH+1);
 	exeCmdLine = (char *)malloc(MAX_PATH+1);
-
 	memset(exeFileName,0,MAX_PATH+1);
-	// memset(exeWorkingDir,0,MAX_PATH+1);
 	memset(exeCmdLine,0,MAX_PATH+1);
-
-    // GetCurrentDirectory(MAX_PATH,exeWorkingDir);
 
 	int exeCmdLineLen = 0;
 	int i = 1;
+
+	// need a stronger argv loop
 
 	for(;i < argc;i++)
     {
@@ -106,7 +104,6 @@ int main(int argc, char **argv)
 
 	if(exeCmdLine[0] == '"')
     {
-        // printf("* culling cmdline\n");
         i = 1;
         while(exeCmdLine[i++] != '"') {} ;
     }
@@ -124,15 +121,6 @@ int main(int argc, char **argv)
 			exit(0);
 		}
     }
-
-	/*
-	// pretty sure i was high when i wrote this
-	if(i == 15)
-    {
-        printf("E:malloc fails when cmdline is 15 bytes long\n");
-		exit(0);
-    }
-	*/
 
 	exeFileName = (char *)malloc(i + 1);
     memset(exeFileName,0,strlen(exeCmdLine) + 1);
@@ -313,7 +301,6 @@ int main(int argc, char **argv)
 						{
 							handleSecondTry(pi.hProcess,hThread,&de);
 							miniDebugger(&pi,&de);
-							// ExitProcess(0);
 						}
 						ContinueDebugEvent (de.dwProcessId, de.dwThreadId,DBG_EXCEPTION_NOT_HANDLED);
 					}
