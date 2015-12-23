@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 
 	printf("* CreateProcess(%s,%s,%s);\n",exeFileName,exeCmdLine,exeWorkingDir);
 	int mRet = CreateProcess(exeFileName,exeCmdLine,NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,exeWorkingDir,&si,&pi);
-	size_t bytes_read;
+	SIZE_T bytes_read;
 
 	_NtQueryInformationProcess NtQueryInformationProcess;
 	HMODULE ntDll = LoadLibrary("ntdll");
@@ -345,7 +345,7 @@ void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 	c.PC_REG -= 1;
 
 	printf("* restoring firstException to %02x\n",(unsigned char )firstByte);
-	size_t bytes_written;
+	SIZE_T bytes_written;
 	WriteProcessMemory(hProcess,(LPVOID )c.PC_REG,&firstByte,1,&bytes_written);
 
 	SetThreadContext(hThread,&c);
@@ -362,7 +362,7 @@ void lookAhead(HANDLE hProcess, HANDLE hThread, LPVOID pc_, DISASM *d)
 	The maximum length of an Intel 64 and IA-32 instruction remains 15 bytes.
 	*/
 	char memChunk[15];
-	size_t bR = 0;
+	SIZE_T bR = 0;
 
 	LPVOID pc = pc_;
 

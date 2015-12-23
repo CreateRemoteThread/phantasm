@@ -70,7 +70,6 @@ void miniDebugger(PROCESS_INFORMATION *pi, DEBUG_EVENT *de)
 				default:
 					break;
 			}
-
 		}
 		else if(strncmp(c,"e",1) == 0)
 		{
