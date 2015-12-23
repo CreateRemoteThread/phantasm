@@ -10,6 +10,10 @@
 
 #pragma comment(lib,"psapi.lib")
 
+// switch out for 32-bit.
+#define REGISTER_LENGTH DWORD32
+// #define ARCHI_64
+
 #define STATE_NONE 0
 #define STATE_STARTCALL 1
 #define STATE_CALLDONE 2
@@ -50,11 +54,9 @@ int main(int argc, char **argv)
 	#ifdef ARCHI_64
 		#define ARCHI 64
 		#define PC_REG Rip
-		#define REGISTER_LENGTH DWORD64
 	#else
 		#define ARCHI 32
 		#define PC_REG Eip
-		#define REGISTER_LENGTH DWORD
 	#endif
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -143,7 +145,7 @@ int main(int argc, char **argv)
 
 	printf("* CreateProcess(%s,%s,%s);\n",exeFileName,exeCmdLine,exeWorkingDir);
 	int mRet = CreateProcess(exeFileName,exeCmdLine,NULL,NULL,FALSE,DEBUG_PROCESS + CREATE_NEW_CONSOLE,NULL,exeWorkingDir,&si,&pi);
-	size_t bytes_read;
+	SIZE_T bytes_read;
 
 	_NtQueryInformationProcess NtQueryInformationProcess;
 	HMODULE ntDll = LoadLibrary("ntdll");
@@ -345,7 +347,7 @@ void handleFirstException(HANDLE hProcess,int threadId,char firstByte)
 	c.PC_REG -= 1;
 
 	printf("* restoring firstException to %02x\n",(unsigned char )firstByte);
-	size_t bytes_written;
+	SIZE_T bytes_written;
 	WriteProcessMemory(hProcess,(LPVOID )c.PC_REG,&firstByte,1,&bytes_written);
 
 	SetThreadContext(hThread,&c);
@@ -362,7 +364,7 @@ void lookAhead(HANDLE hProcess, HANDLE hThread, LPVOID pc_, DISASM *d)
 	The maximum length of an Intel 64 and IA-32 instruction remains 15 bytes.
 	*/
 	char memChunk[15];
-	size_t bR = 0;
+	SIZE_T bR = 0;
 
 	LPVOID pc = pc_;
 

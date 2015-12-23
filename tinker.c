@@ -6,12 +6,14 @@
 #include "oracle.h"
 #include "tinker.h"
 
-#if REGISTER_LENGTH == DWORD64
+#ifdef ARCHI_64
 	#define ARCHI 64
 	#define PC_REG Rip
+	#define REGISTER_LENGTH DWORD64
 #else
 	#define ARCHI 32
 	#define PC_REG Eip
+	#define REGISTER_LENGTH DWORD
 #endif
 
 #define MAX_CMD 1024

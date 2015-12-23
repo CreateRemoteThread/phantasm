@@ -4,12 +4,14 @@
 #include <winternl.h>
 #include <psapi.h>
 
-#if REGISTER_LENGTH == DWORD64
+#ifdef ARCHI_64
 	#define ARCHI 64
 	#define PC_REG Rip
+	#define REGISTER_LENGTH DWORD64
 #else
 	#define ARCHI 32
 	#define PC_REG Eip
+	#define REGISTER_LENGTH DWORD
 #endif
 
 #if ARCHI == 64
@@ -193,10 +195,10 @@ unsigned int resolveAddr(CONTEXT *c,char *resolver)
 			switch(resolver[1])
 			{
 				case 'd':
-					return c->Rdi;
+					return c->Edi;
 					break;
 				case 's':
-					return c->Rsi;
+					return c->Esi;
 					break;
 				default:
 					printf(" - unrecognized register '%s'\n",resolver);
@@ -206,46 +208,8 @@ unsigned int resolveAddr(CONTEXT *c,char *resolver)
 		}
 		else
 		{
-			long int regnum = strtol((char *)(resolver + 1),NULL,10);
-			if(regnum >= 8 && regnum <= 15)
-			{
-				switch(regnum)
-				{	
-					case 8:
-						return c->R8;
-						break;
-					case 9:
-						return c->R9;
-						break;
-					case 10:
-						return c->R10;
-						break;
-					case 11:
-						return c->R11;
-						break;
-					case 12:
-						return c->R12;
-						break;
-					case 13:
-						return c->R13;
-						break;
-					case 14:
-						return c->R14;
-						break;
-					case 15:
-						return c->R15;
-						break;
-					default:
-						printf(" - unrecognized register 'R%d'\n",regnum);
-						exit(0);
-						break;
-				}
-			}
-			else
-			{
-				printf(" - unrecognized register '%s'\n",resolver);
-				exit(0);
-			}
+			printf(" - unrecognized register '%s'\n",resolver);
+			exit(0);
 		}
 	}
 	else
